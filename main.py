@@ -1,60 +1,79 @@
 import sys
 import sqlite3
-from PyQt6 import uic
+import os
+import shutil
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QDialog
+from UI.main_ui import Ui_MainWindow
+from UI.addEditCoffeeForm_ui import Ui_AddEditCoffeeForm
 
 
-# Класс главного окна
-class CoffeeApp(QMainWindow):
+def get_db_path():
+    """Определяет путь к базе данных"""
+    if getattr(sys, 'frozen', False):
+        # Для собранного приложения
+        app_dir = os.path.dirname(sys.executable)
+        permanent_db = os.path.join(app_dir, 'coffee.sqlite')
+
+        # Копируем БД из временной папки при первом запуске
+        if not os.path.exists(permanent_db):
+            temp_dir = sys._MEIPASS
+            temp_db = os.path.join(temp_dir, 'data', 'coffee.sqlite')
+            shutil.copy(temp_db, permanent_db)
+
+        return permanent_db
+    else:
+        # Для режима разработки
+        return os.path.join(os.path.dirname(__file__), 'data', 'coffee.sqlite')
+
+
+DB_PATH = get_db_path()
+
+
+class CoffeeApp(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi('main.ui', self)
+        self.setupUi(self)
 
-        # Создаем таблицу в БД при первом запуске
+        # Создаем таблицу при первом запуске
         self.create_table()
         self.load_data()
-        # 1
-        # Привязываем кнопки
+
         self.btnAdd.clicked.connect(self.open_add_form)
         self.btnEdit.clicked.connect(self.open_edit_form)
 
     def create_table(self):
-        conn = sqlite3.connect('coffee.sqlite')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS coffee (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sort_name TEXT NOT NULL,
-                degree TEXT NOT NULL,
-                type TEXT NOT NULL,
-                description TEXT,
-                price REAL NOT NULL,
-                size INTEGER NOT NULL
-            )
-        ''')
+               CREATE TABLE IF NOT EXISTS coffee (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   sort_name TEXT NOT NULL,
+                   degree TEXT NOT NULL,
+                   type TEXT NOT NULL,
+                   description TEXT,
+                   price REAL NOT NULL,
+                   size INTEGER NOT NULL
+               )
+           ''')
         conn.commit()
         conn.close()
 
     def load_data(self):
-        conn = sqlite3.connect('coffee.sqlite')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM coffee")
 
-        # Очистка таблицы
         self.tableWidget.setRowCount(0)
-
-        # Заполнение таблицы
         for row_num, row_data in enumerate(cursor.fetchall()):
             self.tableWidget.insertRow(row_num)
             for col_num, data in enumerate(row_data):
                 self.tableWidget.setItem(row_num, col_num, QTableWidgetItem(str(data)))
-
         conn.close()
 
     def open_add_form(self):
         self.add_form = CoffeeForm()
         self.add_form.exec()
-        self.load_data()  # Обновляем таблицу после закрытия формы
+        self.load_data()
 
     def open_edit_form(self):
         selected = self.tableWidget.currentRow()
@@ -69,26 +88,23 @@ class CoffeeApp(QMainWindow):
                 print(f"Ошибка при открытии формы редактирования: {e}")
 
 
-# Класс формы добавления/редактирования
-class CoffeeForm(QDialog):
+class CoffeeForm(QDialog, Ui_AddEditCoffeeForm):
     def __init__(self, coffee_id=None):
         super().__init__()
-        uic.loadUi('addEditCoffeeForm.ui', self)
+        self.setupUi(self)
+        self.coffee_id = coffee_id
 
-        # Заполняем комбобоксы
         self.roastInput.addItems(['Светлая', 'Средняя', 'Тёмная'])
         self.typeInput.addItems(['Молотый', 'В зернах'])
 
-        # Если редактирование
-        self.coffee_id = coffee_id
-        if coffee_id:
+        if self.coffee_id:
             self.load_coffee_data()
 
         self.saveButton.clicked.connect(self.save_data)
 
     def load_coffee_data(self):
         try:
-            conn = sqlite3.connect('coffee.sqlite')
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM coffee WHERE id=?", (self.coffee_id,))
             data = cursor.fetchone()
@@ -109,7 +125,7 @@ class CoffeeForm(QDialog):
             self.close()
 
     def save_data(self):
-        conn = sqlite3.connect('coffee.sqlite')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         data = (
