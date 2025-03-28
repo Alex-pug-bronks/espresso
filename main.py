@@ -13,7 +13,7 @@ class CoffeeApp(QMainWindow):
         # Создаем таблицу в БД при первом запуске
         self.create_table()
         self.load_data()
-
+        # 1
         # Привязываем кнопки
         self.btnAdd.clicked.connect(self.open_add_form)
         self.btnEdit.clicked.connect(self.open_edit_form)
